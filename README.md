@@ -1,4 +1,4 @@
-
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <h2 align="center">
     ──「⛦ 𝗗𝗘𝗩 𝗕𝗬 - 𝐼 ꪜ ꪖ ꪀ ⛦ 」──
 </h2>
@@ -6,7 +6,7 @@
 <p align="center">
   <img src="https://files.catbox.moe/dt1sla.jpg">
 
-━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 </h2>
 <img
 
@@ -111,8 +111,8 @@ Reload, start, and enable:
 sudo systemctl daemon-reload
 sudo systemctl start telegram-bot
 sudo systemctl enable ttelegram-bot
-
-### This is a Private **AI CHATBOT** made by:  
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## This is a Private **AI CHATBOT** made by:  
 - [- 𝐼 ꪜ ꪖ ꪀ](https://t.me/x9Ahad)  
 - [BROTHER](https://t.me/Shadow_x_Jinwoo) 
 
