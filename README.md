@@ -110,5 +110,9 @@ Reload, start, and enable:
 
 sudo systemctl daemon-reload
 sudo systemctl start telegram-bot
-sudo systemctl enable telegram-bot
+sudo systemctl enable ttelegram-bot
+
+### This is a Private **AI CHATBOT** made by:  
+- [- 𝐼 ꪜ ꪖ ꪀ](https://t.me/x9Ahad)  
+- [BROTHER](https://t.me/Shadow_x_Jinwoo) 
 
