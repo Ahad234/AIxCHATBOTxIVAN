@@ -12,10 +12,11 @@ import google.generativeai as genai
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8490850898:AAGqe1UJi6z9SDyQ06Dg-4XzJNUEgGPZLGA")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCoB2aGZxtZOl3LySSZbuUwzXcY--QcDmc")
 
+OWNER_NAME = "- 𝐼 ꪜ ꪖ ꪀ"  # <--- Bot owner name
+
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# Chatbot toggle storage
 enabled_chats = set()
 
 # =============== LOGGING ==================
@@ -28,10 +29,7 @@ STICKERS = {
     "funny": [
         "CAACAgUAAxkBAAEBH1hmQjY0AAGaP8kKqZ2MTXShUMQJtFMAAvcBAAJdH3lV8A8g8T9R3uIuBA",
         "CAACAgUAAxkBAAEBH1pmQjY7Z3QY7gABRQZjNn2Gp09u2qcAAkMBAAJdH3lVUNXY8x_gD0wuBA",
-        "CAACAgUAAxkBAAEBH1xmQjZAI49byo2q7DZp1G4pyhBk9WwAApYBAAJdH3lVTy4xZa4qAiEuBA",
-        "CAACAgUAAxkBAAECHYdlmQjv7u0o56M7Qm3Wc1W7W8hzPgACawMAAladvQZxQvP1DjY8ViME",
-        "CAACAgUAAxkBAAECHYtlmQjyK8gFQb5QpO2oP0-94GJjMgACbgMAAladvQYow-VqTXQJNSME",
-        "CAACAgUAAxkBAAECHZBlmQj2OlfOsvhHPMWdnR0oRLnU3AACbwMAAladvQZ2qZ6qHYQ8zSME"
+        "CAACAgUAAxkBAAEBH1xmQjZAI49byo2q7DZp1G4pyhBk9WwAApYBAAJdH3lVTy4xZa4qAiEuBA"
     ],
     "lol": [
         "CAACAgUAAxkBAAECHa1lmlaugh1AC",
@@ -64,8 +62,8 @@ GIFS = [
     "https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif"
 ]
 
-# =============== HELPERS ==================
-def get_reaction(message):
+# =============== REACTION LOGIC ==================
+def get_reaction(message: str):
     msg = message.lower()
     if any(word in msg for word in ["love", "❤️", "meri jaan", "baby", "bhabhi"]):
         return random.choice(STICKERS["love"])
@@ -80,70 +78,64 @@ def get_reaction(message):
     else:
         return random.choice(STICKERS["funny"])
 
-def is_nsfw(message):
-    banned_words = ["nude", "porn", "xxx", "sex", "boobs", "cock", "pussy"]
-    return any(word in message.lower() for word in banned_words)
-
 # =============== COMMAND HANDLERS ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Namaste! Main ek AI chatbot hu.\n"
-        "Type /chatbot enable to start chatting.\n"
-        "Type /chatbot disable to stop me."
+        "🤖 Namaste! Main ek AI chatbot hoon. /chatbot enable karo baat karne ke liye."
     )
 
-async def chatbot_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
-    if len(context.args) > 0:
-        if context.args[0].lower() == "enable":
-            enabled_chats.add(chat_id)
-            await update.message.reply_text("✅ Chatbot enabled!")
-        elif context.args[0].lower() == "disable":
-            enabled_chats.discard(chat_id)
-            await update.message.reply_text("❌ Chatbot disabled!")
-    else:
-        await update.message.reply_text("Usage: /chatbot enable or /chatbot disable")
+async def enable_chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    enabled_chats.add(chat_id)
+    await update.message.reply_text("✅ Chatbot enabled!")
 
-# =============== MAIN CHAT HANDLER ==================
+async def disable_chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    enabled_chats.discard(chat_id)
+    await update.message.reply_text("❌ Chatbot disabled!")
+
+# =============== MESSAGE HANDLER ==================
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
-    text = update.message.text
+    chat_id = update.effective_chat.id
     user = update.message.from_user.first_name
+    text = update.message.text
 
     if chat_id not in enabled_chats:
         return
 
-    if is_nsfw(text):
-        await update.message.reply_text("⚠️ Bhai, ye baatein allowed nahi hain!")
-        return
+    # Special Owner Question
+    if any(word in text.lower() for word in ["who made you", "owner", "creator"]):
+        reply = f"Mujhe {OWNER_NAME} ne banaya hai! 🔥"
+    else:
+        # AI Reply
+        try:
+            response = model.generate_content(
+                f"Reply in Hinglish (Hindi in English letters), friendly, human-like. No NSFW. User: {text}"
+            )
+            reply = response.text.strip()
+        except Exception as e:
+            logging.error(f"Gemini error: {e}")
+            reply = "Arre bhai, thoda error aa gaya! 😅"
 
-    try:
-        prompt = f"User({user}) said: {text}\nReply in Hinglish, friendly tone, like a real human bro:"
-        response = model.generate_content(prompt)
-        reply = response.text.strip()
+    await update.message.reply_text(f"{user}, {reply}")
 
-        await update.message.reply_text(f"{reply}")
+    # Send Sticker or GIF
+    reaction = get_reaction(text)
+    if reaction.startswith("http"):
+        await update.message.reply_animation(reaction)
+    else:
+        await update.message.reply_sticker(reaction)
 
-        # Sticker/GIF Reaction
-        reaction = get_reaction(text)
-        if "http" in reaction:
-            await update.message.reply_animation(reaction)
-        else:
-            await update.message.reply_sticker(reaction)
-
-    except Exception as e:
-        await update.message.reply_text("⚠️ Error in AI response.")
-        print(e)
-
-# =============== MAIN APP ==================
+# =============== MAIN ==================
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("chatbot", chatbot_cmd))
+    app.add_handler(CommandHandler("chatbot", enable_chatbot, filters.Regex("^enable$")))
+    app.add_handler(CommandHandler("chatbot", disable_chatbot, filters.Regex("^disable$")))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
-    print("🤖 Bot started...")
+    logging.info("Bot started!")
     app.run_polling()
 
 if __name__ == "__main__":
