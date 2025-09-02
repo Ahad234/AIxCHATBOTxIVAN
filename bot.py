@@ -1,7 +1,7 @@
 import os
 import random
 import logging
-from telegram import Update, ChatAction
+from telegram.constants import ChatAction
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ContextTypes, filters
