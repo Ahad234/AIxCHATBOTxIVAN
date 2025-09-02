@@ -1,12 +1,14 @@
 import os
 import random
 import logging
+from telegram import Update  # <-- ADD THIS LINE
 from telegram.constants import ChatAction
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ContextTypes, filters
 )
 import google.generativeai as genai
+
 
 # =============== CONFIG ==================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8490850898:AAGqe1UJi6z9SDyQ06Dg-4XzJNUEgGPZLGA")
