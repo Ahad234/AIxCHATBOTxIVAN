@@ -1,106 +1,149 @@
 import os
-import tempfile
-import requests
-from dotenv import load_dotenv
+import random
+import logging
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-from google import genai
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler,
+    ContextTypes, filters
+)
+import google.generativeai as genai
 
-# Load environment variables
-load_dotenv()
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN","8499063535:AAFyY7Fz1U_tXXJ6QK5yMI1FsOGzps7Hs78")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY","AIzaSyCoB2aGZxtZOl3LySSZbuUwzXcY--QcDmc")
+# =============== CONFIG ==================
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY")
 
-# Initialize Gemini client
-client = genai.Client(api_key=GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
 
-# Chatbot toggle (True = enabled)
-chatbot_enabled = True
+# Chatbot toggle storage
+enabled_chats = set()
 
-# Start command
+# =============== LOGGING ==================
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+
+# =============== STICKERS & GIFS ==================
+STICKERS = {
+    "funny": [
+        "CAACAgUAAxkBAAEBH1hmQjY0AAGaP8kKqZ2MTXShUMQJtFMAAvcBAAJdH3lV8A8g8T9R3uIuBA",
+        "CAACAgUAAxkBAAEBH1pmQjY7Z3QY7gABRQZjNn2Gp09u2qcAAkMBAAJdH3lVUNXY8x_gD0wuBA",
+        "CAACAgUAAxkBAAEBH1xmQjZAI49byo2q7DZp1G4pyhBk9WwAApYBAAJdH3lVTy4xZa4qAiEuBA",
+        "CAACAgUAAxkBAAECHYdlmQjv7u0o56M7Qm3Wc1W7W8hzPgACawMAAladvQZxQvP1DjY8ViME",
+        "CAACAgUAAxkBAAECHYtlmQjyK8gFQb5QpO2oP0-94GJjMgACbgMAAladvQYow-VqTXQJNSME",
+        "CAACAgUAAxkBAAECHZBlmQj2OlfOsvhHPMWdnR0oRLnU3AACbwMAAladvQZ2qZ6qHYQ8zSME"
+    ],
+    "lol": [
+        "CAACAgUAAxkBAAECHa1lmlaugh1AC",
+        "CAACAgUAAxkBAAECHa9lmlaugh2AC"
+    ],
+    "angry": [
+        "CAACAgUAAxkBAAECHbFlmangry1AC",
+        "CAACAgUAAxkBAAECHbNlmlangry2AC"
+    ],
+    "love": [
+        "CAACAgUAAxkBAAECHbVlmlove1AC",
+        "CAACAgUAAxkBAAECHbdlmlove2AC"
+    ],
+    "chill": [
+        "CAACAgUAAxkBAAECHbllmchill1AC",
+        "CAACAgUAAxkBAAECHbtlmchill2AC"
+    ]
+}
+
+GIFS = [
+    "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif",
+    "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif",
+    "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif",
+    "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
+    "https://media.giphy.com/media/xT9IgIc0lryrxvqVGM/giphy.gif",
+    "https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif",
+    "https://media.giphy.com/media/l41lFw057lAJQMwg0/giphy.gif",
+    "https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif",
+    "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif",
+    "https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif"
+]
+
+# =============== HELPERS ==================
+def get_reaction(message):
+    msg = message.lower()
+    if any(word in msg for word in ["love", "❤️", "meri jaan", "baby", "bhabhi"]):
+        return random.choice(STICKERS["love"])
+    elif any(word in msg for word in ["angry", "gussa", "😡", "mad"]):
+        return random.choice(STICKERS["angry"])
+    elif any(word in msg for word in ["lol", "haha", "rofl", "😂", "😆"]):
+        return random.choice(STICKERS["lol"])
+    elif any(word in msg for word in ["chill", "relax", "cool", "😎"]):
+        return random.choice(STICKERS["chill"])
+    elif random.choice([True, False]):
+        return random.choice(GIFS)
+    else:
+        return random.choice(STICKERS["funny"])
+
+def is_nsfw(message):
+    banned_words = ["nude", "porn", "xxx", "sex", "boobs", "cock", "pussy"]
+    return any(word in message.lower() for word in banned_words)
+
+# =============== COMMAND HANDLERS ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Hello! I'm a Gemini AI bot.\n"
-        "Commands:\n"
-        "- `/chatbot on` or `/chatbot off` to enable/disable AI chat\n"
-        "- `/sticker <prompt>` to create an AI sticker"
+        "🤖 Namaste! Main ek AI chatbot hu.\n"
+        "Type /chatbot enable to start chatting.\n"
+        "Type /chatbot disable to stop me."
     )
 
-# Chatbot toggle command
-async def toggle_chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global chatbot_enabled
-    if not context.args:
-        await update.message.reply_text(f"🤖 Chatbot is currently {'ON' if chatbot_enabled else 'OFF'}. Use `/chatbot on` or `/chatbot off`.")
-        return
-    
-    choice = context.args[0].lower()
-    if choice == "on":
-        chatbot_enabled = True
-        await update.message.reply_text("✅ Chatbot enabled!")
-    elif choice == "off":
-        chatbot_enabled = False
-        await update.message.reply_text("❌ Chatbot disabled!")
+async def chatbot_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    if len(context.args) > 0:
+        if context.args[0].lower() == "enable":
+            enabled_chats.add(chat_id)
+            await update.message.reply_text("✅ Chatbot enabled!")
+        elif context.args[0].lower() == "disable":
+            enabled_chats.discard(chat_id)
+            await update.message.reply_text("❌ Chatbot disabled!")
     else:
-        await update.message.reply_text("⚠️ Use `/chatbot on` or `/chatbot off`.")
+        await update.message.reply_text("Usage: /chatbot enable or /chatbot disable")
 
-# Handle messages
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global chatbot_enabled
-    if not chatbot_enabled:
-        return  # Ignore messages if chatbot is disabled
+# =============== MAIN CHAT HANDLER ==================
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    text = update.message.text
+    user = update.message.from_user.first_name
 
-    user_message = update.message.text
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=user_message
-        )
-        reply = response.text or "I couldn't generate a response."
-    except Exception as e:
-        reply = f"⚠️ Error: {e}"
-
-    await update.message.reply_text(reply)
-
-# AI Sticker generator
-async def ai_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Please provide a prompt. Example: `/sticker cute cat`")
+    if chat_id not in enabled_chats:
         return
-    
-    prompt = " ".join(context.args)
-    await update.message.reply_text(f"🎨 Generating sticker: {prompt}...")
+
+    if is_nsfw(text):
+        await update.message.reply_text("⚠️ Bhai, ye baatein allowed nahi hain!")
+        return
 
     try:
-        # Generate image from Gemini
-        image = client.models.generate_image(
-            model="imagen-3.0-generate-001",
-            prompt=prompt,
-            size="512x512"
-        )
-        image_url = image.generated_images[0].image_uri
+        prompt = f"User({user}) said: {text}\nReply in Hinglish, friendly tone, like a real human bro:"
+        response = model.generate_content(prompt)
+        reply = response.text.strip()
 
-        # Download image
-        img_data = requests.get(image_url).content
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f:
-            f.write(img_data)
-            temp_path = f.name
+        await update.message.reply_text(f"{reply}")
 
-        # Send as sticker
-        with open(temp_path, "rb") as sticker_file:
-            await update.message.reply_sticker(sticker_file)
+        # Sticker/GIF Reaction
+        reaction = get_reaction(text)
+        if "http" in reaction:
+            await update.message.reply_animation(reaction)
+        else:
+            await update.message.reply_sticker(reaction)
 
-        os.remove(temp_path)
     except Exception as e:
-        await update.message.reply_text(f"⚠️ Could not generate sticker: {e}")
+        await update.message.reply_text("⚠️ Error in AI response.")
+        print(e)
 
-# Main
+# =============== MAIN APP ==================
 def main():
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("chatbot", toggle_chatbot))
-    app.add_handler(CommandHandler("sticker", ai_sticker))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("🤖 Bot is running...")
+    app.add_handler(CommandHandler("chatbot", chatbot_cmd))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
+
+    print("🤖 Bot started...")
     app.run_polling()
 
 if __name__ == "__main__":
