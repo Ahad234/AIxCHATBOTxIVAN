@@ -123,7 +123,7 @@ async def chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚙️ Use `/chatbot enable` or `/chatbot disable`.")
         return
-    
+
     command = context.args[0].lower()
     if command == "enable":
         enabled_chats.add(chat_id)
