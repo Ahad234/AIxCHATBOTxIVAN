@@ -9,8 +9,8 @@ from telegram.ext import (
 import google.generativeai as genai
 
 # =============== CONFIG ==================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8490850898:AAGqe1UJi6z9SDyQ06Dg-4XzJNUEgGPZLGA")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCoB2aGZxtZOl3LySSZbuUwzXcY--QcDmc")
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
