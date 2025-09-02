@@ -81,7 +81,7 @@ def get_reaction(message: str):
 # =============== COMMAND HANDLERS ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Namaste! Main ek AI chatbot hoon. Use `/chatbot enable` or `/chatbot disable`."
+        "🤖 Namaste! Main ek AI chatbot hoon my owner @x9Ahad. Use `/chatbot enable` or `/chatbot disable`."
     )
 
 async def chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
