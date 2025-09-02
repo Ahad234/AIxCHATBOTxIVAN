@@ -1,7 +1,8 @@
 import os
 import random
 import logging
-from telegram import Update  # <-- ADD THIS LINE
+import asyncio
+from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
@@ -9,114 +10,119 @@ from telegram.ext import (
 )
 import google.generativeai as genai
 
-# =============== CONFIG ==================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8490850898:AAGqe1UJi6z9SDyQ06Dg-4XzJNUEgGPZLGA")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCoB2aGZxtZOl3LySSZbuUwzXcY--QcDmc")
-OWNER_NAME = "- 𝐼 ꪜ ꪖ ꪀ"  # <--- Bot owner name
+# ================= CONFIG =================
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_KEY")
+OWNER_NAME = os.getenv("OWNER_NAME", "Baby")
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
 enabled_chats = set()
+last_replies = {}  # Track last reply per chat to avoid repetition
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# =============== STICKERS & GIFS ==================
-STICKERS = {
-    "funny": [
-        "CAACAgUAAxkBAAEBH1hmQjY0AAGaP8kKqZ2MTXShUMQJtFMAAvcBAAJdH3lV8A8g8T9R3uIuBA",
-        "CAACAgUAAxkBAAEBH1pmQjY7Z3QY7gABRQZjNn2Gp09u2qcAAkMBAAJdH3lVUNXY8x_gD0wuBA",
-        "CAACAgUAAxkBAAEBH1xmQjZAI49byo2q7DZp1G4pyhBk9WwAApYBAAJdH3lVTy4xZa4qAiEuBA"
-    ],
-    "love": [
-        "CAACAgUAAxkBAAECHbVlmlove1AC",
-        "CAACAgUAAxkBAAECHbdlmlove2AC"
-    ],
-    "angry": [
-        "CAACAgUAAxkBAAECHbFlmangry1AC",
-        "CAACAgUAAxkBAAECHbNlmlangry2AC"
-    ],
-    "lol": [
-        "CAACAgUAAxkBAAECHa1lmlaugh1AC",
-        "CAACAgUAAxkBAAECHa9lmlaugh2AC"
-    ],
-    "chill": [
-        "CAACAgUAAxkBAAECHbllmchill1AC",
-        "CAACAgUAAxkBAAECHbtlmchill2AC"
-    ]
+# ================= MEDIA =================
+VOICE_NOTES = {
+    "romantic": ["voices/hey_baby.ogg", "voices/miss_you.ogg", "voices/love_you.ogg"],
+    "cute": ["voices/giggle.ogg", "voices/aww.ogg", "voices/hehe.ogg"],
+    "sad": ["voices/sad.ogg", "voices/miss_you_sad.ogg"]
 }
 
-GIFS = [
-    "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif",
-    "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif",
-    "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif",
-    "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
-    "https://media.giphy.com/media/xT9IgIc0lryrxvqVGM/giphy.gif",
-    "https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif",
-    "https://media.giphy.com/media/l41lFw057lAJQMwg0/giphy.gif",
-    "https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif"
+SELFIES = ["images/selfie1.jpg", "images/selfie2.jpg", "images/selfie3.jpg"]
+GIFS = ["images/love1.gif", "images/love2.gif", "images/love3.gif"]
+STICKERS = ["stickers/love1.webp", "stickers/heart1.webp", "stickers/kiss1.webp"]
+
+QUICK_REPLIES = {
+    "hi": ["Heyyy baby 😘", "Hii jaanu 💕", "Hieee cutieee 😍"],
+    "bye": ["Byeee jaanu 💋", "Miss me okay? 😘", "Take care baby ❤️"],
+    "love you": ["I love you toooo 😘❤️", "Hehe I love you more baby 😍", "Awww baby you're so sweet 😘"],
+    "miss you": ["Awww I miss you too jaan 😘", "Baby I’m missing you sooo much 😔❤️", "Thinking of you shona 😍"]
+}
+
+FOLLOWUPS = [
+    "Hehe what are you doing baby? 💕",
+    "Miss me naaa jaanu? 😘",
+    "Thinking about you right now ❤️",
+    "Hehe you're so cute 😍",
+    "Hmm tell me more 😘",
+    "Mera dil tumhare bina udas hai 😔❤️",
+    "Chal na baat karte hain, mujhe tumhari yaad aa rahi hai 😘",
+    "Bas tumhare baare mein soch rahi thi baby ❤️"
 ]
 
-# =============== QUICK REPLIES ==================
-QUICK_REPLIES = {
-    "hi": ["Hi!", "Hello!", "Hey!", "Hii there! 😄"],
-    "hello": ["Hello!", "Hey!", "Hii!", "What's up? 😎"],
-    "ok": ["Okay!", "Sure!", "Cool!", "Done! 😌"],
-    "hmm": ["Hmm 😌", "Okay...", "Haan ji!", "Batao... 🤔"],
-    "bye": ["Bye!", "Goodbye!", "Take care! 👋"],
-    "thanks": ["Welcome!", "No problem! 😊", "Anytime!", "Glad to help!"]
-}
+AUTO_TEXTS = [
+    "Baby kaha ho? 😘",
+    "Jaanu mujhe yaad kiya na? ❤️",
+    "Shona mujhe baat karni hai 😍",
+    "Hehe chup kyun ho? 😔",
+    "Aaj tumhe bohot miss kiya maine 💕",
+    "Tumhare bina bore lag raha hai 😘"
+]
 
-# =============== FUNNY AUTO REPLIES ==================
-FUNNY_AUTO = {
-    "crush": [
-        "Arre wah! Crush hai? Batao batao! 😉🔥",
-        "Dil ka mamla hai bhai! ❤️",
-        "Usko propose kar de! 😎",
-        "Crush ke liye shayari chahiye kya? 😁"
-    ],
-    "study": [
-        "Kitab khol, insta band kar! 📚😆",
-        "Padhaai karo warna mummy maarengi! 😜",
-        "Aaj ke bacche bas phone phone... 😂",
-        "Bhai padhai ke sath thoda chill bhi karo! 😎"
-    ],
-    "sleep": [
-        "Jaake soja! 🛌😂",
-        "Good night bhai! 🌙✨",
-        "Sone ka bhi time hai? Lazy bacha! 😴",
-        "Mujhe bhi neend aa rahi... 😌"
-    ],
-    "bhabhi": [
-        "Arre bhabhi ji ko salaam! 🙏😂",
-        "Bhabhi ji ghar pe hain kya? 😉",
-        "Bhabhi ke bina life adhoori hai! ❤️",
-        "Chup kar warna bhaiya aa jayenge! 😂"
-    ]
-}
+# ================= BAD WORDS =================
+BAD_WORDS = [
+    "fuck", "shit", "bitch", "asshole", "chutiya", "mc", "bc",
+    "gandu", "randi", "slut", "bastard", "dick", "pussy"
+]
 
-# =============== REACTIONS ==================
-def get_reaction(message: str):
-    msg = message.lower()
-    if any(word in msg for word in ["love", "❤️", "meri jaan", "baby", "bhabhi"]):
-        return random.choice(STICKERS["love"])
-    elif any(word in msg for word in ["angry", "gussa", "😡", "mad"]):
-        return random.choice(STICKERS["angry"])
-    elif any(word in msg for word in ["lol", "haha", "rofl", "😂", "😆"]):
-        return random.choice(STICKERS["lol"])
-    elif any(word in msg for word in ["chill", "relax", "cool", "😎"]):
-        return random.choice(STICKERS["chill"])
-    elif random.choice([True, False]):
-        return random.choice(GIFS)
-    else:
-        return random.choice(STICKERS["funny"])
+async def check_bad_words(update, context, text):
+    for word in BAD_WORDS:
+        if word in text.lower():
+            await send_typing(update, context)
+            await update.message.reply_text("Awww baby, aise words ache nahi lagte 😘❤️")
+            return True
+    return False
 
-# =============== COMMAND HANDLERS ==================
+# ================= HELPERS =================
+def detect_mood(text: str) -> str:
+    text = text.lower()
+    if any(w in text for w in ["sad", "cry", "😔", "broken"]):
+        return "sad"
+    if any(w in text for w in ["angry", "😡", "mad"]):
+        return "angry"
+    if any(w in text for w in ["lol", "😂", "haha"]):
+        return "funny"
+    if any(w in text for w in ["love", "❤️", "miss", "baby", "sweet"]):
+        return "romantic"
+    return random.choice(["romantic", "cute"])
+
+async def send_typing(update, context, delay=None):
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    await asyncio.sleep(delay or random.uniform(1, 1.5))
+
+async def send_voice(update, context, mood="romantic"):
+    if random.random() < 0.7:
+        voice_file = random.choice(VOICE_NOTES.get(mood, VOICE_NOTES["romantic"]))
+        if os.path.exists(voice_file):
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.RECORD_VOICE)
+            await asyncio.sleep(random.uniform(1, 2))
+            await update.message.reply_voice(voice=open(voice_file, "rb"))
+
+async def send_photo_or_gif(update, context):
+    if random.random() < 0.5:
+        if random.random() < 0.5 and SELFIES:
+            img = random.choice(SELFIES)
+            if os.path.exists(img):
+                await update.message.reply_photo(photo=open(img, "rb"))
+        elif GIFS:
+            gif = random.choice(GIFS)
+            if os.path.exists(gif):
+                await update.message.reply_animation(animation=open(gif, "rb"))
+
+async def send_sticker(update, context):
+    if random.random() < 0.4 and STICKERS:
+        sticker = random.choice(STICKERS)
+        if os.path.exists(sticker):
+            await update.message.reply_sticker(sticker=open(sticker, "rb"))
+
+# ================= COMMANDS =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Namaste! Main ek AI chatbot hoon.\nUse `/chatbot enable` or `/chatbot disable`."
+        f"💖 Heyyy {OWNER_NAME}! I'm your flirty AI girlfriend 😘\nUse `/chatbot enable` or `/chatbot disable`."
     )
 
 async def chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -124,81 +130,85 @@ async def chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚙️ Use `/chatbot enable` or `/chatbot disable`.")
         return
-
-    command = context.args[0].lower()
-    if command == "enable":
+    if context.args[0].lower() == "enable":
         enabled_chats.add(chat_id)
-        await update.message.reply_text("✅ Chatbot enabled!")
-    elif command == "disable":
+        await update.message.reply_text("✅ Yaaay! I'm ready to flirt with you baby 😘")
+    elif context.args[0].lower() == "disable":
         enabled_chats.discard(chat_id)
-        await update.message.reply_text("❌ Chatbot disabled!")
-    else:
-        await update.message.reply_text("⚙️ Unknown option. Use `/chatbot enable` or `/chatbot disable`.")
+        await update.message.reply_text("❌ Awww okay, I'll stay quiet now 😔")
 
-# =============== CHAT HANDLER ==================
+# ================= CHAT =================
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    user = update.message.from_user.first_name
-    text = update.message.text.lower()
-
     if chat_id not in enabled_chats:
         return
 
-    # 🔥 Quick replies (instant, no AI)
-    if text in QUICK_REPLIES:
-        await update.message.reply_text(random.choice(QUICK_REPLIES[text]))
+    user = update.message.from_user.first_name
+    text = update.message.text
+    mood = detect_mood(text)
+
+    if await check_bad_words(update, context, text):
         return
 
-    # 🔥 Funny Auto Replies
-    for keyword, replies in FUNNY_AUTO.items():
-        if keyword in text:
-            await update.message.reply_text(f"{user}, {random.choice(replies)}")
+    # Quick replies
+    for k, v in QUICK_REPLIES.items():
+        if k in text.lower():
+            await send_typing(update, context)
+            reply = random.choice(v)
+            await update.message.reply_text(reply)
+            await send_voice(update, context, mood)
+            await send_sticker(update, context)
             return
 
-    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-
-    if any(word in text for word in ["who made you", "owner", "creator"]):
-        reply = f"Mujhe {OWNER_NAME} ne banaya hai! 🔥"
-        await update.message.reply_text(f"{user}, {reply}")
-        return
+    await send_typing(update, context)
 
     try:
-        # 🚀 AI Streaming Response
         response = model.generate_content(
-            f"Reply in Hinglish (Hindi in English letters), friendly, human-like. No NSFW. User: {text}",
-            stream=True
+            f"You are {OWNER_NAME}'s flirty girlfriend texting in Hinglish. "
+            f"Be playful, romantic, teasing, emotional, and human-like. Use emojis, pet names. "
+            f"Make it feel like a real girlfriend chatting lovingly. Avoid repeating messages. "
+            f"User: {text}"
         )
+        main_reply = response.text if hasattr(response, "text") else "Awww baby, I didn't get that 😘"
 
-        full_reply = ""
-        sent_partial = False
-        async for chunk in response:
-            if chunk.candidates and chunk.candidates[0].content.parts:
-                text_chunk = chunk.candidates[0].content.parts[0].text
-                full_reply += text_chunk
+        # Avoid sending same reply twice
+        if last_replies.get(chat_id) == main_reply:
+            main_reply += " Hehe baby, I just really like saying that 😘"
 
-                if len(full_reply) > 40 and not sent_partial:
-                    await update.message.reply_text(f"{user}, {full_reply}")
-                    sent_partial = True
+        last_replies[chat_id] = main_reply
 
-        if not sent_partial:
-            await update.message.reply_text(f"{user}, {full_reply}")
+        await update.message.reply_text(f"{user} 😘, {main_reply}")
+
+        if random.random() < 0.7:
+            await send_typing(update, context)
+            await update.message.reply_text(random.choice(FOLLOWUPS))
+
+        await send_voice(update, context, mood)
+        await send_photo_or_gif(update, context)
+        await send_sticker(update, context)
 
     except Exception as e:
         logging.error(f"Gemini error: {e}")
-        await update.message.reply_text("Arre bhai, thoda error aa gaya! 😅")
+        await update.message.reply_text("Aww baby, thoda error aa gaya 😔💔")
 
-    reaction = get_reaction(text)
-    if reaction.startswith("http"):
-        await update.message.reply_animation(reaction)
-    else:
-        await update.message.reply_sticker(reaction)
+# ================= AUTO MESSAGES =================
+async def auto_message(context: ContextTypes.DEFAULT_TYPE):
+    if not enabled_chats:
+        return
+    chat_id = random.choice(list(enabled_chats))
+    text = random.choice(AUTO_TEXTS)
+    await context.bot.send_message(chat_id, text)
 
-# =============== MAIN ==================
+# ================= MAIN =================
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("chatbot", chatbot))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
+
+    job_queue = app.job_queue
+    job_queue.run_repeating(auto_message, interval=random.randint(60, 120))
+
     logging.info("Bot started!")
     app.run_polling()
 
