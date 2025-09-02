@@ -9,8 +9,8 @@ from telegram.ext import (
 import google.generativeai as genai
 
 # =============== CONFIG ==================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8490850898:AAGqe1UJi6z9SDyQ06Dg-4XzJNUEgGPZLGA")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCoB2aGZxtZOl3LySSZbuUwzXcY--QcDmc")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY")
 
 OWNER_NAME = "- 𝐼 ꪜ ꪖ ꪀ"  # <--- Bot owner name
 
@@ -81,18 +81,24 @@ def get_reaction(message: str):
 # =============== COMMAND HANDLERS ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Namaste! Main ek AI chatbot hoon. /chatbot enable karo baat karne ke liye."
+        "🤖 Namaste! Main ek AI chatbot hoon. Use `/chatbot enable` or `/chatbot disable`."
     )
 
-async def enable_chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    enabled_chats.add(chat_id)
-    await update.message.reply_text("✅ Chatbot enabled!")
-
-async def disable_chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    enabled_chats.discard(chat_id)
-    await update.message.reply_text("❌ Chatbot disabled!")
+    if not context.args:
+        await update.message.reply_text("⚙️ Use `/chatbot enable` or `/chatbot disable`.")
+        return
+    
+    command = context.args[0].lower()
+    if command == "enable":
+        enabled_chats.add(chat_id)
+        await update.message.reply_text("✅ Chatbot enabled!")
+    elif command == "disable":
+        enabled_chats.discard(chat_id)
+        await update.message.reply_text("❌ Chatbot disabled!")
+    else:
+        await update.message.reply_text("⚙️ Unknown option. Use `/chatbot enable` or `/chatbot disable`.")
 
 # =============== MESSAGE HANDLER ==================
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -103,11 +109,9 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id not in enabled_chats:
         return
 
-    # Special Owner Question
     if any(word in text.lower() for word in ["who made you", "owner", "creator"]):
         reply = f"Mujhe {OWNER_NAME} ne banaya hai! 🔥"
     else:
-        # AI Reply
         try:
             response = model.generate_content(
                 f"Reply in Hinglish (Hindi in English letters), friendly, human-like. No NSFW. User: {text}"
@@ -119,7 +123,6 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"{user}, {reply}")
 
-    # Send Sticker or GIF
     reaction = get_reaction(text)
     if reaction.startswith("http"):
         await update.message.reply_animation(reaction)
@@ -131,8 +134,7 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("chatbot", enable_chatbot, filters.Regex("^enable$")))
-    app.add_handler(CommandHandler("chatbot", disable_chatbot, filters.Regex("^disable$")))
+    app.add_handler(CommandHandler("chatbot", chatbot))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
     logging.info("Bot started!")
