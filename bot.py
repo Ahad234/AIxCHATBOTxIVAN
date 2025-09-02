@@ -1,7 +1,7 @@
 import os
 import random
 import logging
-from telegram import Update
+from telegram import Update, ChatAction
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ContextTypes, filters
@@ -62,7 +62,7 @@ GIFS = [
     "https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif"
 ]
 
-# =============== REACTION LOGIC ==================
+# =============== REACTIONS ==================
 def get_reaction(message: str):
     msg = message.lower()
     if any(word in msg for word in ["love", "❤️", "meri jaan", "baby", "bhabhi"]):
@@ -81,7 +81,7 @@ def get_reaction(message: str):
 # =============== COMMAND HANDLERS ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Namaste! Main ek AI chatbot hoon my owner @x9Ahad. Use `/chatbot enable` or `/chatbot disable`."
+        "🤖 Namaste! Main ek AI chatbot hoon.\nUse `/chatbot enable` or `/chatbot disable`."
     )
 
 async def chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -100,7 +100,7 @@ async def chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⚙️ Unknown option. Use `/chatbot enable` or `/chatbot disable`.")
 
-# =============== MESSAGE HANDLER ==================
+# =============== CHAT HANDLER ==================
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.message.from_user.first_name
@@ -109,20 +109,40 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id not in enabled_chats:
         return
 
+    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+
     if any(word in text.lower() for word in ["who made you", "owner", "creator"]):
         reply = f"Mujhe {OWNER_NAME} ne banaya hai! 🔥"
-    else:
-        try:
-            response = model.generate_content(
-                f"Reply in Hinglish (Hindi in English letters), friendly, human-like. No NSFW. User: {text}"
-            )
-            reply = response.text.strip()
-        except Exception as e:
-            logging.error(f"Gemini error: {e}")
-            reply = "Arre bhai, thoda error aa gaya! 😅"
+        await update.message.reply_text(f"{user}, {reply}")
+        return
 
-    await update.message.reply_text(f"{user}, {reply}")
+    try:
+        response = model.generate_content(
+            f"Reply in Hinglish (Hindi in English letters), friendly, human-like. No NSFW. User: {text}",
+            stream=True
+        )
 
+        full_reply = ""
+        sent_partial = False
+        async for chunk in response:
+            if chunk.candidates and chunk.candidates[0].content.parts:
+                text_chunk = chunk.candidates[0].content.parts[0].text
+                full_reply += text_chunk
+
+                # Send first 40+ chars early
+                if len(full_reply) > 40 and not sent_partial:
+                    await update.message.reply_text(f"{user}, {full_reply}")
+                    sent_partial = True
+
+        # If no partial was sent, send full
+        if not sent_partial:
+            await update.message.reply_text(f"{user}, {full_reply}")
+
+    except Exception as e:
+        logging.error(f"Gemini error: {e}")
+        await update.message.reply_text("Arre bhai, thoda error aa gaya! 😅")
+
+    # Send sticker or GIF
     reaction = get_reaction(text)
     if reaction.startswith("http"):
         await update.message.reply_animation(reaction)
@@ -132,11 +152,9 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =============== MAIN ==================
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("chatbot", chatbot))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
-
     logging.info("Bot started!")
     app.run_polling()
 
