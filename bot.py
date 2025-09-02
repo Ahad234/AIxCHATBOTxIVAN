@@ -8,8 +8,8 @@ from google import genai
 
 # Load environment variables
 load_dotenv()
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN","8499063535:AAFyY7Fz1U_tXXJ6QK5yMI1FsOGzps7Hs78")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY","AIzaSyCoB2aGZxtZOl3LySSZbuUwzXcY--QcDmc")
 
 # Initialize Gemini client
 client = genai.Client(api_key=GEMINI_API_KEY)
